@@ -1,0 +1,65 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest  
+
+    services:
+      mysql:
+        image: mysql:latest
+        env:
+          MYSQL_ROOT_PASSWORD: 2244
+          MYSQL_DATABASE: ecommerce
+        ports:
+          - 3306:3306
+        options: --health-cmd="mysqladmin ping --silent" --health-interval=5s --health-timeout=5s --health-retries=3
+
+    steps:
+   
+    - name: Checkout code
+      uses: actions/checkout@v2
+
+ 
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v2
+
+ 
+    - name: Cache Docker layers
+      uses: actions/cache@v2
+      with:
+        path: /tmp/.buildx-cache
+        key: ${{ runner.os }}-docker-${{ github.sha }}
+        restore-keys: |
+          ${{ runner.os }}-docker-
+
+
+    - name: Build Docker containers
+      run: |
+        docker-compose -f docker-compose.yml up --build -d
+
+  
+    - name: Run tests
+      run: |
+        # Add any test commands you need, for example:
+        # docker exec -it spring-backend mvn test
+        docker exec -it spring-backend curl --silent --show-error --fail http://localhost:8080/actuator/health
+
+    
+    - name: Push Docker images
+      if: github.ref == 'refs/heads/main'
+      run: |
+        docker login -u $DOCKER_USERNAME -p $DOCKER_PASSWORD
+        docker-compose push
+
+
+    - name: Clean up Docker containers
+      run: |
+        docker-compose down
